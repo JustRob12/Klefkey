@@ -81,13 +81,13 @@ export const ActionSheet: React.FC<ActionSheetProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={handleClose}>
-      <TouchableWithoutFeedback onPress={handleClose}>
-        <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
-          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-              style={styles.keyboardContainer}
-            >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardWrapper}
+      >
+        <TouchableWithoutFeedback onPress={handleClose}>
+          <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
+            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
               <Animated.View
                 style={[
                   styles.sheet,
@@ -136,10 +136,10 @@ export const ActionSheet: React.FC<ActionSheetProps> = ({
                   </View>
                 )}
               </Animated.View>
-            </KeyboardAvoidingView>
-          </TouchableWithoutFeedback>
-        </Animated.View>
-      </TouchableWithoutFeedback>
+            </TouchableWithoutFeedback>
+          </Animated.View>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -150,9 +150,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'flex-end',
   },
-  keyboardContainer: {
-    width: '100%',
-    maxHeight: '88%',
+  keyboardWrapper: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
   sheet: {
     borderTopLeftRadius: 32,

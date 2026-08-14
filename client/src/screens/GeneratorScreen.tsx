@@ -9,7 +9,7 @@ import {
   Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { KeyRound, Copy, RefreshCw, Check, ShieldCheck, Zap } from 'lucide-react-native';
+import { Copy, RefreshCw } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useAppContext } from '../context/AppContext';
 import { MainHeader } from '../components/MainHeader';
@@ -69,35 +69,6 @@ export const GeneratorScreen: React.FC<GeneratorScreenProps> = ({ onOpenSettings
     showFeedback('copy', 'Password Copied to Clipboard!');
   };
 
-  // Entropy Calculation
-  const calculateEntropy = () => {
-    let poolSize = 0;
-    if (includeUpper) poolSize += 26;
-    if (includeLower) poolSize += 26;
-    if (includeNumbers) poolSize += 10;
-    if (includeSymbols) poolSize += 30;
-    if (poolSize === 0) poolSize = 26;
-
-    const entropy = Math.floor(length * Math.log2(poolSize));
-    let rating = 'Weak';
-    let color = '#ef4444';
-
-    if (entropy >= 80) {
-      rating = 'Enterprise / Invincible';
-      color = '#10b981';
-    } else if (entropy >= 60) {
-      rating = 'Strong Security';
-      color = '#10b981';
-    } else if (entropy >= 40) {
-      rating = 'Moderate';
-      color = '#f59e0b';
-    }
-
-    return { entropy, rating, color };
-  };
-
-  const { entropy, rating, color } = calculateEntropy();
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -130,40 +101,6 @@ export const GeneratorScreen: React.FC<GeneratorScreenProps> = ({ onOpenSettings
                 Copy Password
               </Text>
             </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Entropy & Strength Meter (Container Responsive) */}
-        <View style={[styles.strengthCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.strengthRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
-              <ShieldCheck size={20} color={color} />
-              <Text
-                style={[styles.strengthTitle, { color: colors.text }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit={true}
-                minimumFontScale={0.7}
-              >
-                Strength Rating
-              </Text>
-            </View>
-            <Text
-              style={[styles.entropyBadge, { color: color, fontFamily: theme.fonts.bold }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit={true}
-              minimumFontScale={0.7}
-            >
-              {entropy} Bits ({rating})
-            </Text>
-          </View>
-
-          <View style={[styles.trackBg, { backgroundColor: colors.border }]}>
-            <View
-              style={[
-                styles.trackFill,
-                { width: `${Math.min(100, (entropy / 100) * 100)}%`, backgroundColor: color },
-              ]}
-            />
           </View>
         </View>
 

@@ -202,10 +202,67 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                 const palette = CARD_PALETTES.find((p) => p.id === folder.color);
                 const accentHex = palette && palette.id !== 'default' ? palette.hex : null;
 
+                if (viewMode === 'list') {
+                  return (
+                    <TouchableOpacity
+                      key={folder.id}
+                      style={styles.folderCardListWrapper}
+                      onPress={() => setCurrentFolderId(folder.id)}
+                      activeOpacity={0.85}
+                    >
+                      <LinearGradient
+                        colors={gradientColors}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={[
+                          styles.folderCardList,
+                          { borderColor: accentHex ? accentHex + '50' : colors.border },
+                        ]}
+                      >
+                        <View style={styles.folderListLeft}>
+                          <View
+                            style={[
+                              styles.folderIconBg,
+                              {
+                                backgroundColor: accentHex
+                                  ? accentHex + '25'
+                                  : (isDarkMode ? 'rgba(255,255,255,0.08)' : '#e9ecef'),
+                              },
+                            ]}
+                          >
+                            <FolderIcon size={22} color={accentHex || colors.text} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[styles.folderName, { color: colors.text }]}
+                              numberOfLines={1}
+                              adjustsFontSizeToFit={true}
+                              minimumFontScale={0.7}
+                            >
+                              {folder.name}
+                            </Text>
+                            <Text style={[styles.folderItemCountList, { color: colors.textMuted }]}>
+                              {subItemCount} {subItemCount === 1 ? 'item' : 'items'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <TouchableOpacity
+                          style={styles.folderMenuBtn}
+                          onPress={() => setSelectedFolderForAction(folder)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <MoreVertical size={18} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  );
+                }
+
                 return (
                   <TouchableOpacity
                     key={folder.id}
-                    style={viewMode === 'grid' ? styles.folderCardGridWrapper : styles.folderCardListWrapper}
+                    style={styles.folderCardGridWrapper}
                     onPress={() => setCurrentFolderId(folder.id)}
                     activeOpacity={0.85}
                   >
@@ -214,7 +271,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 1 }}
                       style={[
-                        viewMode === 'grid' ? styles.folderCardGrid : styles.folderCardList,
+                        styles.folderCardGrid,
                         { borderColor: accentHex ? accentHex + '50' : colors.border },
                       ]}
                     >
@@ -503,7 +560,16 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: 18,
     borderWidth: 1,
-    padding: 14,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  folderListLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
   },
   folderCardTop: {
     flexDirection: 'row',
@@ -529,6 +595,11 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.medium,
     fontSize: rf(12),
     marginTop: 4,
+  },
+  folderItemCountList: {
+    fontFamily: theme.fonts.medium,
+    fontSize: rf(12),
+    marginTop: 2,
   },
   emptyContainer: {
     borderRadius: 20,

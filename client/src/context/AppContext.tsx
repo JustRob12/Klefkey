@@ -410,7 +410,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = [newFolder, ...folders];
     setFolders(updated);
     await AsyncStorage.setItem('@klefkey_folders', JSON.stringify(updated));
-    showFeedback('success', `Folder "${newFolder.name}" Created`);
     return newFolder;
   };
 
@@ -420,7 +419,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     setFolders(updated);
     await AsyncStorage.setItem('@klefkey_folders', JSON.stringify(updated));
-    showFeedback('success', 'Folder Updated');
   };
 
   const deleteFolder = async (id: string) => {
@@ -453,7 +451,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (currentFolderId && folderIdsToDelete.has(currentFolderId)) {
       setCurrentFolderId(null);
     }
-    showFeedback('delete', 'Folder Removed (Items moved to Vault)');
   };
 
   const getFolderPath = (folderId: string | null): BreadcrumbItem[] => {
@@ -492,7 +489,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updated = [newItem, ...items];
     setItems(updated);
     await AsyncStorage.setItem('@klefkey_items', JSON.stringify(updated));
-    showFeedback('success', `Saved "${newItem.title}"`);
     return newItem;
   };
 
@@ -502,14 +498,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     setItems(updated);
     await AsyncStorage.setItem('@klefkey_items', JSON.stringify(updated));
-    showFeedback('success', 'Item Updated');
   };
 
   const deleteItem = async (id: string) => {
     const updated = items.filter((item) => item.id !== id);
     setItems(updated);
     await AsyncStorage.setItem('@klefkey_items', JSON.stringify(updated));
-    showFeedback('delete', 'Item Deleted');
   };
 
   const toggleFavorite = async (id: string) => {
