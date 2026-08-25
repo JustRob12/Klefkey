@@ -25,7 +25,7 @@ export const MainHeader: React.FC<MainHeaderProps> = ({ onOpenSettings }) => {
           {userName || 'Rob'}
         </Text>
         <Text style={[styles.taglineText, { color: colors.textSecondary }]}>
-          Store your passwords & emails securely
+          Store your passwords, files & photos securely
         </Text>
       </View>
 

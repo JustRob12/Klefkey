@@ -6,15 +6,17 @@ import { rf, theme } from '../theme';
 
 interface DriveBreadcrumbProps {
   currentFolderId: string | null;
+  rootName?: string;
   onSelectFolder: (folderId: string | null) => void;
 }
 
 export const DriveBreadcrumb: React.FC<DriveBreadcrumbProps> = ({
   currentFolderId,
+  rootName = 'Vault',
   onSelectFolder,
 }) => {
   const { getFolderPath, colors, isDarkMode } = useAppContext();
-  const path: BreadcrumbItem[] = getFolderPath(currentFolderId);
+  const path: BreadcrumbItem[] = getFolderPath(currentFolderId, rootName);
 
   return (
     <View style={styles.container}>

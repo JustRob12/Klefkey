@@ -28,6 +28,7 @@ import {
   User,
   Camera,
   Edit2,
+  FileText,
 } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
@@ -70,6 +71,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
   // Security audit stats
   const totalItems = items.length;
   const totalFolders = folders.length;
+  const totalFiles = items.reduce((acc, item) => acc + (item.files ? item.files.length : 0), 0);
   const weakCount = items.filter((i) => i.password && i.password.length < 8).length;
 
   const handlePickAvatar = async () => {
@@ -127,8 +129,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
     const summary = items
       .map(
         (i) =>
-          `Title: ${i.title}\nCategory: ${i.category}\nUser: ${i.username || i.email || 'N/A'}\nSite: ${i.website || 'N/A'
-          }\n---`
+          `Title: ${i.title}\nCategory: ${i.category}\nUser: ${i.username || i.email || 'N/A'}\nSite: ${i.website || 'N/A'}\nFiles: ${i.files && i.files.length > 0 ? i.files.map((f) => f.name).join(', ') : 'None'}\n---`
       )
       .join('\n');
     await Clipboard.setStringAsync(summary);
@@ -250,6 +251,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
                 <FolderGit2 size={18} color={colors.text} />
                 <Text style={[styles.statNum, { color: colors.text }]}>{totalFolders}</Text>
                 <Text style={[styles.statLabel, { color: colors.textMuted }]}>Folders</Text>
+              </View>
+
+              <View style={[styles.statBox, { backgroundColor: colors.background }]}>
+                <FileText size={18} color={colors.text} />
+                <Text style={[styles.statNum, { color: colors.text }]}>{totalFiles}</Text>
+                <Text style={[styles.statLabel, { color: colors.textMuted }]}>Files</Text>
               </View>
 
               <View style={[styles.statBox, { backgroundColor: colors.background }]}>

@@ -6,9 +6,10 @@ import {
   StyleSheet,
   StatusBar,
   Animated,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Lock, ScanFace, Fingerprint, KeyRound, AlertCircle } from 'lucide-react-native';
+import { ScanFace, Fingerprint, KeyRound, AlertCircle, Delete } from 'lucide-react-native';
 import { useAppContext } from '../context/AppContext';
 import { rf, theme } from '../theme';
 
@@ -77,9 +78,11 @@ export const LockScreen: React.FC = () => {
       <View style={styles.content}>
         {/* Header Branding */}
         <View style={styles.header}>
-          <View style={[styles.logoIcon, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#e4e4e7' }]}>
-            <Lock size={32} color={colors.text} />
-          </View>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logoImage}
+            resizeMode="cover"
+          />
           <Text style={[styles.appName, { color: colors.text }]}>Klefkey</Text>
           <Text style={[styles.lockStatus, { color: colors.textSecondary }]}>
             Vault Locked
@@ -190,12 +193,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  logoIcon: {
-    width: 68,
-    height: 68,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
+  logoImage: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
     marginBottom: 14,
   },
   appName: {

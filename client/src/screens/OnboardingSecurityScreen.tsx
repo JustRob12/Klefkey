@@ -8,6 +8,7 @@ import {
   StatusBar,
   Switch,
   ScrollView,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ShieldCheck, User, Fingerprint, ScanFace, Check } from 'lucide-react-native';
@@ -81,9 +82,11 @@ export const OnboardingSecurityScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header Icon */}
         <View style={styles.headerArea}>
-          <View style={[styles.badgeIcon, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#e9ecef' }]}>
-            <ShieldCheck size={36} color={colors.text} />
-          </View>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logoBadge}
+            resizeMode="cover"
+          />
           <Text style={[styles.title, { color: colors.text }]}>
             {step === 1 ? 'Welcome to Klefkey' : 'Confirm & Enable Biometrics'}
           </Text>
@@ -258,13 +261,11 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 16,
   },
-  badgeIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
+  logoBadge: {
+    width: 68,
+    height: 68,
+    borderRadius: 18,
+    marginBottom: 14,
   },
   title: {
     fontFamily: theme.fonts.bold,

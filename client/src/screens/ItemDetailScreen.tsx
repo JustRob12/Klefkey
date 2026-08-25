@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Linking,
   DimensionValue,
+  Image as RNImage,
 } from 'react-native';
 import {
   X,
@@ -26,10 +27,15 @@ import {
   Lock,
   FileText,
   CreditCard,
+  Image as ImageIcon,
+  Share2,
+  FileSpreadsheet,
 } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
-import { useAppContext, VaultItem } from '../context/AppContext';
+import { useAppContext, VaultItem, VaultFile } from '../context/AppContext';
 import { ActionSheet } from '../components/ActionSheet';
+import { FilePreviewModal } from '../components/FilePreviewModal';
+import { formatFileSize, getFileTypeLabel, shareVaultFile } from '../utils/fileStorage';
 import { rf, theme } from '../theme';
 
 interface ItemDetailScreenProps {
@@ -58,6 +64,7 @@ export const ItemDetailScreen: React.FC<ItemDetailScreenProps> = ({
 
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [showFolderPicker, setShowFolderPicker] = useState<boolean>(false);
+  const [previewFile, setPreviewFile] = useState<VaultFile | null>(null);
 
   if (!item) return null;
 
@@ -75,6 +82,15 @@ export const ItemDetailScreen: React.FC<ItemDetailScreenProps> = ({
       target = `https://${target}`;
     }
     Linking.openURL(target).catch(() => showFeedback('error', 'Could not open URL'));
+  };
+
+  const handleShareFile = async (file: VaultFile) => {
+    const success = await shareVaultFile(file.uri, file.mimeType, file.name);
+    if (success) {
+      showFeedback('success', `Exporting ${file.name}`);
+    } else {
+      showFeedback('error', 'Sharing is not supported on this device');
+    }
   };
 
   // Password strength logic
@@ -95,7 +111,18 @@ export const ItemDetailScreen: React.FC<ItemDetailScreenProps> = ({
 
   return (
     <>
-      <ActionSheet visible={visible} onClose={onClose} title={item.title} subtitle={item.category.toUpperCase()}>
+      <ActionSheet
+        visible={visible}
+        onClose={onClose}
+        title={item.title}
+        subtitle={
+          item.category === 'document'
+            ? 'LOCKED DOCUMENT'
+            : item.category === 'image'
+            ? 'LOCKED IMAGE / PHOTO'
+            : item.category.toUpperCase()
+        }
+      >
         {/* Action Buttons Top Bar */}
         <View style={styles.topActions}>
           <TouchableOpacity
@@ -148,24 +175,124 @@ export const ItemDetailScreen: React.FC<ItemDetailScreenProps> = ({
                 setShowFolderPicker(false);
               }}
             >
-              <Text style={{ color: colors.text, fontFamily: theme.fonts.medium }}>📁 Root Vault</Text>
+              <Text style={{ color: colors.text, fontFamily: theme.fonts.medium }}>
+                📁 {item.category === 'document' ? 'Documents Root' : item.category === 'image' ? 'Photos Root' : 'Vault Root'}
+              </Text>
             </TouchableOpacity>
 
-            {folders.map((f) => (
-              <TouchableOpacity
-                key={f.id}
-                style={[
-                  styles.folderOption,
-                  item.folderId === f.id && { backgroundColor: isDarkMode ? '#27272a' : '#e4e4e7' },
-                ]}
-                onPress={() => {
-                  moveItemToFolder(item.id, f.id);
-                  setShowFolderPicker(false);
-                }}
-              >
-                <Text style={{ color: colors.text, fontFamily: theme.fonts.medium }}>📁 {f.name}</Text>
-              </TouchableOpacity>
-            ))}
+            {folders
+              .filter((f) => {
+                if (item.category === 'document') return f.type === 'files';
+                if (item.category === 'image') return f.type === 'images';
+                return f.type === 'vault' || !f.type;
+              })
+              .map((f) => (
+                <TouchableOpacity
+                  key={f.id}
+                  style={[
+                    styles.folderOption,
+                    item.folderId === f.id && { backgroundColor: isDarkMode ? '#27272a' : '#e4e4e7' },
+                  ]}
+                  onPress={() => {
+                    moveItemToFolder(item.id, f.id);
+                    setShowFolderPicker(false);
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontFamily: theme.fonts.medium }}>📁 {f.name}</Text>
+                </TouchableOpacity>
+              ))}
+          </View>
+        )}
+
+        {/* Locked Files & Attachments Section */}
+        {item.files && item.files.length > 0 && (
+          <View style={styles.sectionField}>
+            <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>
+              LOCKED FILES & ATTACHMENTS ({item.files.length})
+            </Text>
+            <View style={styles.fileCardsList}>
+              {item.files.map((file) => {
+                const isImg = file.fileType === 'image';
+                const isPdf = file.fileType === 'pdf';
+                const isWord = file.fileType === 'word';
+
+                return (
+                  <TouchableOpacity
+                    key={file.id}
+                    style={[
+                      styles.fileCard,
+                      { backgroundColor: colors.card, borderColor: colors.border },
+                    ]}
+                    onPress={() => setPreviewFile(file)}
+                    activeOpacity={0.85}
+                  >
+                    {/* Icon or Thumbnail */}
+                    {isImg ? (
+                      <RNImage source={{ uri: file.uri }} style={styles.fileCardThumb} />
+                    ) : (
+                      <View
+                        style={[
+                          styles.fileCardIconBg,
+                          {
+                            backgroundColor: isPdf
+                              ? 'rgba(239, 68, 68, 0.12)'
+                              : isWord
+                              ? 'rgba(59, 130, 246, 0.12)'
+                              : 'rgba(16, 185, 129, 0.12)',
+                          },
+                        ]}
+                      >
+                        <FileText
+                          size={22}
+                          color={isPdf ? '#ef4444' : isWord ? '#3b82f6' : '#10b981'}
+                        />
+                      </View>
+                    )}
+
+                    {/* File Meta */}
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[styles.fileCardTitle, { color: colors.text }]}
+                        numberOfLines={1}
+                      >
+                        {file.name}
+                      </Text>
+                      <Text
+                        style={[styles.fileCardSub, { color: colors.textMuted }]}
+                        numberOfLines={1}
+                      >
+                        {getFileTypeLabel(file.fileType, file.name)} • {formatFileSize(file.size)}
+                      </Text>
+                    </View>
+
+                    {/* Action Buttons */}
+                    <View style={styles.fileCardActions}>
+                      <TouchableOpacity
+                        style={[
+                          styles.fileActionIconBtn,
+                          { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#f1f5f9' },
+                        ]}
+                        onPress={() => setPreviewFile(file)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Eye size={16} color={colors.text} />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.fileActionIconBtn,
+                          { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.08)' : '#f1f5f9' },
+                        ]}
+                        onPress={() => handleShareFile(file)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Share2 size={16} color={colors.text} />
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         )}
 
@@ -289,7 +416,7 @@ export const ItemDetailScreen: React.FC<ItemDetailScreenProps> = ({
           onPress={() => {
             onClose();
             showConfirm(
-              'Delete Credential',
+              'Delete Vault Item',
               `Are you sure you want to delete "${item.title}"? This action cannot be undone.`,
               () => deleteItem(item.id)
             );
@@ -297,9 +424,16 @@ export const ItemDetailScreen: React.FC<ItemDetailScreenProps> = ({
           activeOpacity={0.8}
         >
           <Trash2 size={18} color="#ef4444" />
-          <Text style={styles.deleteBtnText}>Delete Credential</Text>
+          <Text style={styles.deleteBtnText}>Delete Vault Item</Text>
         </TouchableOpacity>
       </ActionSheet>
+
+      {/* Full Screen File & Document Viewer Modal */}
+      <FilePreviewModal
+        visible={!!previewFile}
+        file={previewFile}
+        onClose={() => setPreviewFile(null)}
+      />
     </>
   );
 };
@@ -365,6 +499,50 @@ const styles = StyleSheet.create({
   },
   copyIconButton: {
     padding: 6,
+  },
+  fileCardsList: {
+    gap: 10,
+  },
+  fileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 12,
+  },
+  fileCardThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+  },
+  fileCardIconBg: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fileCardTitle: {
+    fontFamily: theme.fonts.bold,
+    fontSize: rf(14),
+  },
+  fileCardSub: {
+    fontFamily: theme.fonts.medium,
+    fontSize: rf(12),
+    marginTop: 2,
+  },
+  fileCardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  fileActionIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   strengthBox: {
     marginTop: 8,

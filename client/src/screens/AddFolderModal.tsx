@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { FolderPlus, Edit2, Check } from 'lucide-react-native';
-import { useAppContext, Folder, CARD_PALETTES } from '../context/AppContext';
+import { useAppContext, Folder, FolderType, CARD_PALETTES } from '../context/AppContext';
 import { ActionSheet } from '../components/ActionSheet';
 import { rf, theme } from '../theme';
 
 interface AddFolderModalProps {
   visible: boolean;
   folderToEdit?: Folder | null;
+  folderType?: FolderType;
   onClose: () => void;
 }
 
 export const AddFolderModal: React.FC<AddFolderModalProps> = ({
   visible,
   folderToEdit,
+  folderType = 'vault',
   onClose,
 }) => {
   const { createFolder, updateFolder, currentFolderId, getFolderPath, colors, isDarkMode } = useAppContext();
@@ -30,15 +32,17 @@ export const AddFolderModal: React.FC<AddFolderModalProps> = ({
     }
   }, [folderToEdit, visible]);
 
-  const path = getFolderPath(currentFolderId);
-  const currentFolderName = path[path.length - 1]?.name || 'Vault';
+  const effectiveType = folderToEdit?.type || folderType;
+  const rootLabel = effectiveType === 'files' ? 'Documents' : effectiveType === 'images' ? 'Photos' : 'Vault';
+  const path = getFolderPath(currentFolderId, rootLabel);
+  const currentFolderName = path[path.length - 1]?.name || rootLabel;
 
   const handleSubmit = async () => {
     if (folderName.trim() === '') return;
     if (folderToEdit) {
       await updateFolder(folderToEdit.id, folderName.trim(), selectedColor);
     } else {
-      await createFolder(folderName.trim(), currentFolderId, selectedColor);
+      await createFolder(folderName.trim(), currentFolderId, selectedColor, effectiveType);
     }
     setFolderName('');
     setSelectedColor('default');
@@ -67,6 +71,17 @@ export const AddFolderModal: React.FC<AddFolderModalProps> = ({
     </TouchableOpacity>
   );
 
+  const getPlaceholder = () => {
+    switch (effectiveType) {
+      case 'files':
+        return 'e.g. Invoices, Contracts, Tax Reports, Receipts';
+      case 'images':
+        return 'e.g. ID Cards, Receipts, Family Photos, Scans';
+      default:
+        return 'e.g. Work Accounts, Personal, Banking';
+    }
+  };
+
   return (
     <ActionSheet
       visible={visible}
@@ -85,7 +100,7 @@ export const AddFolderModal: React.FC<AddFolderModalProps> = ({
           )}
           <TextInput
             style={[styles.input, { color: colors.text }]}
-            placeholder="e.g. Work Accounts, Personal, Banking"
+            placeholder={getPlaceholder()}
             placeholderTextColor={colors.textMuted}
             value={folderName}
             onChangeText={setFolderName}
@@ -131,26 +146,45 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.semiBold,
     fontSize: rf(13),
     marginBottom: 8,
+    marginTop: 12,
   },
   inputBox: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 52,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    gap: 12,
-    marginBottom: 16,
+    paddingHorizontal: 14,
+    gap: 10,
   },
   input: {
     flex: 1,
     fontFamily: theme.fonts.medium,
-    fontSize: rf(15),
+    fontSize: rf(14),
+  },
+  submitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 56,
+    borderRadius: 18,
+    gap: 10,
+    marginTop: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  submitBtnText: {
+    fontFamily: theme.fonts.bold,
+    fontSize: rf(16),
   },
   colorRow: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 12,
+    marginTop: 8,
+    marginBottom: 8,
     paddingVertical: 4,
   },
   colorCircle: {
@@ -168,22 +202,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 4,
-  },
-  submitBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 54,
-    borderRadius: 16,
-    gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  submitBtnText: {
-    fontFamily: theme.fonts.bold,
-    fontSize: rf(16),
   },
 });

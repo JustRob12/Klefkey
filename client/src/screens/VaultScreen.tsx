@@ -5,8 +5,6 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  StatusBar,
-  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -63,11 +61,21 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedFolderForAction, setSelectedFolderForAction] = useState<Folder | null>(null);
 
-  // Filter folders inside current directory
-  const currentFolders = folders.filter((f) => f.parentId === currentFolderId);
+  // Filter folders inside current directory (Vault folders only)
+  const currentFolders = folders.filter(
+    (f) => (f.type === 'vault' || !f.type) && f.parentId === currentFolderId
+  );
 
-  // Filter vault items inside current directory (or matching search across all)
+  // Filter vault items: STRICTLY Passwords, Emails, Cards, and Notes only
   const currentItems = items.filter((item) => {
+    const isVaultItem =
+      item.category === 'login' ||
+      item.category === 'email' ||
+      item.category === 'card' ||
+      item.category === 'note';
+
+    if (!isVaultItem) return false;
+
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase();
       const matchText =
@@ -108,7 +116,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
   };
 
   const categories = [
-    { id: 'all', name: 'All Items' },
+    { id: 'all', name: 'All Credentials' },
     { id: 'favorites', name: '★ Favorites' },
     { id: 'login', name: 'Logins' },
     { id: 'email', name: 'Emails' },
@@ -179,7 +187,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.mainScroll}
       >
-        {/* Folders Section (Google Drive Grid / List with Gradient) */}
+        {/* Folders Section (Vault Folders with Gradient) */}
         {currentFolders.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -197,7 +205,14 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
 
             <View style={viewMode === 'grid' ? styles.folderGrid : styles.folderList}>
               {currentFolders.map((folder) => {
-                const subItemCount = items.filter((i) => i.folderId === folder.id).length;
+                const subItemCount = items.filter(
+                  (i) =>
+                    i.folderId === folder.id &&
+                    (i.category === 'login' ||
+                      i.category === 'email' ||
+                      i.category === 'card' ||
+                      i.category === 'note')
+                ).length;
                 const gradientColors = getCardGradient(folder.color);
                 const palette = CARD_PALETTES.find((p) => p.id === folder.color);
                 const accentHex = palette && palette.id !== 'default' ? palette.hex : null;
@@ -242,7 +257,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                               {folder.name}
                             </Text>
                             <Text style={[styles.folderItemCountList, { color: colors.textMuted }]}>
-                              {subItemCount} {subItemCount === 1 ? 'item' : 'items'}
+                              {subItemCount} {subItemCount === 1 ? 'credential' : 'credentials'}
                             </Text>
                           </View>
                         </View>
@@ -262,7 +277,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                 return (
                   <TouchableOpacity
                     key={folder.id}
-                    style={styles.folderCardGridWrapper}
+                    style={styles.folderCardWrapper}
                     onPress={() => setCurrentFolderId(folder.id)}
                     activeOpacity={0.85}
                   >
@@ -306,7 +321,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                         {folder.name}
                       </Text>
                       <Text style={[styles.folderItemCount, { color: colors.textMuted }]}>
-                        {subItemCount} {subItemCount === 1 ? 'item' : 'items'}
+                        {subItemCount} {subItemCount === 1 ? 'credential' : 'credentials'}
                       </Text>
                     </LinearGradient>
                   </TouchableOpacity>
@@ -316,20 +331,20 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
           </View>
         )}
 
-        {/* Vault Items Credentials Section with Gradient to White */}
+        {/* Vault Items Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              CREDENTIALS & VAULT ({currentItems.length})
+              CREDENTIALS & LOGINS ({currentItems.length})
             </Text>
           </View>
 
           {currentItems.length === 0 ? (
             <View style={[styles.emptyContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Key size={36} color={colors.textMuted} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>No Items Found</Text>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No Credentials Found</Text>
               <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-                Tap the (+) button below to store passwords, emails, notes, or create folders.
+                Tap the (+) button below to store passwords, emails, financial cards, or create folders.
               </Text>
               <TouchableOpacity
                 style={[styles.addInlineBtn, { backgroundColor: colors.primary }]}
@@ -384,6 +399,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                       >
                         {getCategoryIcon(item.category, accentHex || colors.primary)}
                       </View>
+
                       <View style={{ flex: 1 }}>
                         <Text
                           style={[styles.itemTitle, { color: colors.text }]}
@@ -405,7 +421,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                     </View>
 
                     <View style={styles.itemRight}>
-                      {/* Quick Copy Password */}
+                      {/* Quick Copy Password if available */}
                       {item.password && (
                         <TouchableOpacity
                           style={[
@@ -434,7 +450,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
                         />
                       </TouchableOpacity>
 
-                      {/* Quick Delete Credential */}
+                      {/* Quick Delete */}
                       <TouchableOpacity
                         style={styles.actionIconButton}
                         onPress={() =>
@@ -456,7 +472,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
         </View>
       </ScrollView>
 
-      {/* Folder Action Sheet (Edit / Delete Folder Options) */}
+      {/* Folder Action Sheet */}
       <ActionSheet
         visible={!!selectedFolderForAction}
         onClose={() => setSelectedFolderForAction(null)}
@@ -484,7 +500,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
               if (target) {
                 showConfirm(
                   'Delete Folder',
-                  `Are you sure you want to delete "${target.name}"? Items inside will be moved to Root Vault.`,
+                  `Are you sure you want to delete "${target.name}"? Credentials inside will be moved to Root Vault.`,
                   () => deleteFolder(target.id)
                 );
               }
@@ -544,7 +560,7 @@ const styles = StyleSheet.create({
   folderList: {
     gap: 10,
   },
-  folderCardGridWrapper: {
+  folderCardWrapper: {
     width: '48%',
   },
   folderCardListWrapper: {

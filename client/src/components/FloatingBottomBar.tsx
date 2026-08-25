@@ -1,12 +1,14 @@
 import React, { useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native';
-import { FolderGit2, Plus, KeyRound } from 'lucide-react-native';
+import { FolderGit2, Plus, FileText, Image as ImageIcon } from 'lucide-react-native';
 import { useAppContext } from '../context/AppContext';
 import { rf, theme } from '../theme';
 
+export type MainTabType = 'vault' | 'files' | 'images';
+
 interface FloatingBottomBarProps {
-  activeTab: 'vault' | 'generator';
-  onSelectTab: (tab: 'vault' | 'generator') => void;
+  activeTab: MainTabType;
+  onSelectTab: (tab: MainTabType) => void;
   onPressPlus: () => void;
 }
 
@@ -20,7 +22,8 @@ export const FloatingBottomBar: React.FC<FloatingBottomBarProps> = ({
   // Animated Values for soft press physics
   const plusScale = useRef(new Animated.Value(1)).current;
   const vaultScale = useRef(new Animated.Value(1)).current;
-  const genScale = useRef(new Animated.Value(1)).current;
+  const filesScale = useRef(new Animated.Value(1)).current;
+  const imagesScale = useRef(new Animated.Value(1)).current;
 
   const animateScale = (anim: Animated.Value, toVal: number) => {
     Animated.spring(anim, {
@@ -31,9 +34,15 @@ export const FloatingBottomBar: React.FC<FloatingBottomBarProps> = ({
     }).start();
   };
 
+  const tabs: { id: MainTabType; label: string; icon: any; scale: Animated.Value }[] = [
+    { id: 'vault', label: 'Vault', icon: FolderGit2, scale: vaultScale },
+    { id: 'files', label: 'Files', icon: FileText, scale: filesScale },
+    { id: 'images', label: 'Photos', icon: ImageIcon, scale: imagesScale },
+  ];
+
   return (
     <View style={styles.outerContainer} pointerEvents="box-none">
-      {/* 1. Main Round Capsule Container holding Vault & Generator */}
+      {/* 1. Main Round Capsule Container holding 3 Tabs: Vault, Files, Photos */}
       <View
         style={[
           styles.mainNavContainer,
@@ -43,83 +52,51 @@ export const FloatingBottomBar: React.FC<FloatingBottomBarProps> = ({
           },
         ]}
       >
-        {/* Vault Tab */}
-        <TouchableOpacity
-          style={styles.tabButton}
-          onPressIn={() => animateScale(vaultScale, 0.92)}
-          onPressOut={() => animateScale(vaultScale, 1)}
-          onPress={() => onSelectTab('vault')}
-          activeOpacity={0.8}
-        >
-          <Animated.View
-            style={[
-              styles.activePill,
-              activeTab === 'vault' && {
-                backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.14)' : 'rgba(9, 9, 11, 0.08)',
-              },
-              { transform: [{ scale: vaultScale }] },
-            ]}
-          >
-            <FolderGit2
-              size={19}
-              color={activeTab === 'vault' ? colors.primary : colors.textMuted}
-              strokeWidth={activeTab === 'vault' ? 2.5 : 2}
-            />
-            <Text
-              style={[
-                styles.tabLabel,
-                {
-                  color: activeTab === 'vault' ? colors.text : colors.textMuted,
-                  fontFamily: activeTab === 'vault' ? theme.fonts.bold : theme.fonts.medium,
-                },
-              ]}
-              numberOfLines={1}
-              adjustsFontSizeToFit={true}
-              minimumFontScale={0.7}
-            >
-              Vault
-            </Text>
-          </Animated.View>
-        </TouchableOpacity>
+        {tabs.map((tab) => {
+          const IconComponent = tab.icon;
+          const isActive = activeTab === tab.id;
 
-        {/* Generator Tab */}
-        <TouchableOpacity
-          style={styles.tabButton}
-          onPressIn={() => animateScale(genScale, 0.92)}
-          onPressOut={() => animateScale(genScale, 1)}
-          onPress={() => onSelectTab('generator')}
-          activeOpacity={0.8}
-        >
-          <Animated.View
-            style={[
-              styles.activePill,
-              activeTab === 'generator' && {
-                backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.14)' : 'rgba(9, 9, 11, 0.08)',
-              },
-              { transform: [{ scale: genScale }] },
-            ]}
-          >
-            <KeyRound
-              size={19}
-              color={activeTab === 'generator' ? colors.primary : colors.textMuted}
-              strokeWidth={activeTab === 'generator' ? 2.5 : 2}
-            />
-            <Text
-              style={[
-                styles.tabLabel,
-                {
-                  color: activeTab === 'generator' ? colors.text : colors.textMuted,
-                  fontFamily: activeTab === 'generator' ? theme.fonts.bold : theme.fonts.medium,
-                },
-              ]}
-              numberOfLines={1}
-              adjustsFontSizeToFit={true}
-              minimumFontScale={0.7}
+          return (
+            <TouchableOpacity
+              key={tab.id}
+              style={styles.tabButton}
+              onPressIn={() => animateScale(tab.scale, 0.92)}
+              onPressOut={() => animateScale(tab.scale, 1)}
+              onPress={() => onSelectTab(tab.id)}
+              activeOpacity={0.8}
             >
-              Generator
-            </Text>
-          </Animated.View>
-        </TouchableOpacity>
+              <Animated.View
+                style={[
+                  styles.activePill,
+                  isActive && {
+                    backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.14)' : 'rgba(9, 9, 11, 0.08)',
+                  },
+                  { transform: [{ scale: tab.scale }] },
+                ]}
+              >
+                <IconComponent
+                  size={18}
+                  color={isActive ? colors.primary : colors.textMuted}
+                  strokeWidth={isActive ? 2.5 : 2}
+                />
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    {
+                      color: isActive ? colors.text : colors.textMuted,
+                      fontFamily: isActive ? theme.fonts.bold : theme.fonts.medium,
+                    },
+                  ]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit={true}
+                  minimumFontScale={0.7}
+                >
+                  {tab.label}
+                </Text>
+              </Animated.View>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* 2. Separate Floating Plus (+) Circle Button Positioned Beside Container */}
@@ -151,11 +128,11 @@ const styles = StyleSheet.create({
   outerContainer: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 26 : 18,
-    left: 16,
-    right: 16,
+    left: 14,
+    right: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     zIndex: 99,
   },
   mainNavContainer: {
@@ -163,10 +140,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    height: 60,
-    borderRadius: 30,
+    height: 58,
+    borderRadius: 29,
     borderWidth: 1,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
@@ -182,21 +159,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 18,
+    gap: 5,
   },
   tabLabel: {
-    fontSize: rf(13),
+    fontSize: rf(12),
   },
   plusTouchable: {
     borderRadius: 30,
   },
   separatePlusBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

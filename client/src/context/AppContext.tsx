@@ -4,7 +4,17 @@ import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { darkColors, lightColors, ColorsType } from '../theme';
 
-export type ItemCategory = 'login' | 'email' | 'note' | 'card';
+export type ItemCategory = 'login' | 'email' | 'note' | 'card' | 'document' | 'image';
+
+export interface VaultFile {
+  id: string;
+  name: string;
+  uri: string;
+  mimeType?: string;
+  size?: number;
+  fileType: 'image' | 'pdf' | 'word' | 'other';
+  createdAt: string;
+}
 
 export interface CardInfo {
   cardNumber?: string;
@@ -22,7 +32,7 @@ export interface CardColorPalette {
 }
 
 export const CARD_PALETTES: CardColorPalette[] = [
-  { id: 'default', name: 'Monochrome', hex: '#09090b', tint: 'rgba(9, 9, 11, 0.05)', darkTint: 'rgba(255, 255, 255, 0.05)' },
+  { id: 'default', name: 'Monochrome', hex: '#09090b', tint: 'rgba(9, 9, 9, 0.05)', darkTint: 'rgba(255, 255, 255, 0.05)' },
   { id: 'blue', name: 'Ocean Blue', hex: '#3b82f6', tint: 'rgba(59, 130, 246, 0.22)', darkTint: 'rgba(59, 130, 246, 0.32)' },
   { id: 'purple', name: 'Royal Purple', hex: '#8b5cf6', tint: 'rgba(139, 92, 246, 0.22)', darkTint: 'rgba(139, 92, 246, 0.32)' },
   { id: 'emerald', name: 'Emerald', hex: '#10b981', tint: 'rgba(16, 185, 129, 0.22)', darkTint: 'rgba(16, 185, 129, 0.32)' },
@@ -43,16 +53,20 @@ export interface VaultItem {
   website?: string;
   notes?: string;
   cardDetails?: CardInfo;
+  files?: VaultFile[];
   color?: string;
   isFavorite: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
+export type FolderType = 'vault' | 'files' | 'images';
+
 export interface Folder {
   id: string;
   name: string;
   parentId: string | null;
+  type?: FolderType;
   icon?: string;
   color?: string;
   createdAt: string;
@@ -107,10 +121,10 @@ interface AppContextType {
   folders: Folder[];
   currentFolderId: string | null;
   setCurrentFolderId: (folderId: string | null) => void;
-  createFolder: (name: string, parentId?: string | null, color?: string) => Promise<Folder>;
+  createFolder: (name: string, parentId?: string | null, color?: string, type?: FolderType) => Promise<Folder>;
   updateFolder: (id: string, name: string, color?: string) => Promise<void>;
   deleteFolder: (id: string) => Promise<void>;
-  getFolderPath: (folderId: string | null) => BreadcrumbItem[];
+  getFolderPath: (folderId: string | null, rootName?: string) => BreadcrumbItem[];
 
   // Vault Items
   items: VaultItem[];
@@ -396,12 +410,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createFolder = async (
     name: string,
     parentId: string | null = currentFolderId,
-    color?: string
+    color?: string,
+    type: FolderType = 'vault'
   ): Promise<Folder> => {
     const newFolder: Folder = {
       id: `folder_${Date.now()}`,
       name: name.trim(),
       parentId: parentId,
+      type: type,
       icon: 'folder',
       color: color || 'default',
       createdAt: new Date().toISOString(),
@@ -453,8 +469,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const getFolderPath = (folderId: string | null): BreadcrumbItem[] => {
-    const path: BreadcrumbItem[] = [{ id: null, name: 'Vault' }];
+  const getFolderPath = (folderId: string | null, rootName: string = 'Vault'): BreadcrumbItem[] => {
+    const path: BreadcrumbItem[] = [{ id: null, name: rootName }];
     if (!folderId) return path;
 
     const chain: BreadcrumbItem[] = [];
