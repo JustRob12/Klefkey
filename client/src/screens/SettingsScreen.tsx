@@ -29,10 +29,12 @@ import {
   Camera,
   Edit2,
   FileText,
+  EyeOff,
 } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as ImagePicker from 'expo-image-picker';
 import { useAppContext } from '../context/AppContext';
+import { setSystemOperationActive } from '../utils/fileStorage';
 import { ActionSheet } from '../components/ActionSheet';
 import { rf, theme } from '../theme';
 
@@ -50,6 +52,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
     biometricsEnabled,
     biometricsType,
     hasBiometricsHardware,
+    autoLockOnExit,
+    setAutoLockOnExit,
+    autoDeleteOriginalPhotos,
+    setAutoDeleteOriginalPhotos,
     updateSecuritySettings,
     lockApp,
     isDarkMode,
@@ -82,6 +88,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
         return;
       }
 
+      setSystemOperationActive(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
@@ -97,6 +104,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
     } catch (err) {
       console.log('Image pick error:', err);
       showFeedback('error', 'Could not pick image');
+    } finally {
+      setSystemOperationActive(false);
     }
   };
 
@@ -273,6 +282,25 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.cardTitle, { color: colors.textMuted }]}>BIOMETRICS & MASTER PIN</Text>
 
+            {/* Auto-Lock on Exit Toggle */}
+            <View style={styles.settingRow}>
+              <View style={styles.settingLeft}>
+                <Lock size={20} color={colors.text} />
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={[styles.rowLabel, { color: colors.text }]}>Auto-Lock on Exit</Text>
+                  <Text style={[styles.rowSub, { color: colors.textMuted }]}>
+                    Ask for fingerprint or PIN immediately when reopening app
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={autoLockOnExit}
+                onValueChange={(val) => setAutoLockOnExit(val)}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor={isDarkMode ? '#09090b' : '#ffffff'}
+              />
+            </View>
+
             {/* Biometrics Toggle */}
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
@@ -312,6 +340,46 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
             </TouchableOpacity>
           </View>
 
+          {/* File & Photo Privacy */}
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.cardTitle, { color: colors.textMuted }]}>FILE & PHOTO PRIVACY</Text>
+
+            {/* Auto Delete Originals Toggle */}
+            <View style={styles.settingRow}>
+              <View style={styles.settingLeft}>
+                <EyeOff size={20} color={colors.text} />
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={[styles.rowLabel, { color: colors.text }]}>Hide Originals from Device</Text>
+                  <Text style={[styles.rowSub, { color: colors.textMuted }]}>
+                    Prompt to delete originals from public gallery after locking
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={autoDeleteOriginalPhotos}
+                onValueChange={(val) => setAutoDeleteOriginalPhotos(val)}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor={isDarkMode ? '#09090b' : '#ffffff'}
+              />
+            </View>
+
+            {/* Sandbox Shield Status */}
+            <View style={[styles.settingRow, { borderBottomWidth: 0 }]}>
+              <View style={styles.settingLeft}>
+                <ShieldCheck size={20} color="#10b981" />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowLabel, { color: colors.text }]}>Sandbox & .nomedia Shield</Text>
+                  <Text style={[styles.rowSub, { color: colors.textMuted }]}>
+                    External apps & file managers cannot index locked items
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.badgeActive, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+                <Text style={styles.badgeActiveText}>PROTECTED</Text>
+              </View>
+            </View>
+          </View>
+
           {/* Appearance Mode */}
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.cardTitle, { color: colors.textMuted }]}>APPEARANCE</Text>
@@ -344,6 +412,29 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
             <Share2 size={20} color={colors.text} />
             <Text style={[styles.rowLabel, { color: colors.text }]}>Export Vault Summary (Clipboard)</Text>
           </TouchableOpacity>
+
+          {/* App Branding Footer */}
+          <View style={styles.appFooter}>
+            <View
+              style={[
+                styles.footerLogoContainer,
+                {
+                  backgroundColor: isDarkMode ? colors.card : '#f8f9fa',
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <Image
+                source={isDarkMode ? require('../../assets/logo-white.png') : require('../../assets/logo.png')}
+                style={styles.footerLogoImg}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={[styles.footerAppName, { color: colors.text }]}>Klefkey Vault</Text>
+            <Text style={[styles.footerVersion, { color: colors.textMuted }]}>
+              v1.0.0 • Secure End-to-End Encrypted
+            </Text>
+          </View>
         </ScrollView>
 
         {/* Change PIN ActionSheet */}
@@ -602,5 +693,49 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontFamily: theme.fonts.bold,
     fontSize: rf(15),
+  },
+  appFooter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    marginTop: 8,
+    gap: 8,
+  },
+  footerLogoContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  footerLogoImg: {
+    width: 28,
+    height: 28,
+  },
+  footerAppName: {
+    fontFamily: theme.fonts.bold,
+    fontSize: rf(14),
+    letterSpacing: 0.3,
+  },
+  footerVersion: {
+    fontFamily: theme.fonts.regular,
+    fontSize: rf(11),
+  },
+  badgeActive: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  badgeActiveText: {
+    fontFamily: theme.fonts.bold,
+    fontSize: rf(10),
+    color: '#10b981',
+    letterSpacing: 0.5,
   },
 });

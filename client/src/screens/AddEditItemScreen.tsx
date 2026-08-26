@@ -31,7 +31,16 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAppContext, VaultItem, VaultFile, ItemCategory, CARD_PALETTES } from '../context/AppContext';
-import { persistVaultFile, getFileTypeCategory, formatFileSize, getFileTypeLabel } from '../utils/fileStorage';
+import {
+  persistVaultFile,
+  getFileTypeCategory,
+  formatFileSize,
+  getFileTypeLabel,
+  deleteOriginalPhotosFromDevice,
+  ALLOWED_DOC_MIMES,
+  isAllowedDocFile,
+  setSystemOperationActive,
+} from '../utils/fileStorage';
 import { ActionSheet } from '../components/ActionSheet';
 import { rf, theme } from '../theme';
 
@@ -54,6 +63,8 @@ export const AddEditItemScreen: React.FC<AddEditItemScreenProps> = ({
     addItem,
     updateItem,
     showFeedback,
+    showConfirm,
+    autoDeleteOriginalPhotos,
     colors,
     isDarkMode,
   } = useAppContext();
@@ -136,6 +147,7 @@ export const AddEditItemScreen: React.FC<AddEditItemScreenProps> = ({
       }
 
       setIsProcessingFiles(true);
+      setSystemOperationActive(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: true,
@@ -162,36 +174,55 @@ export const AddEditItemScreen: React.FC<AddEditItemScreenProps> = ({
           setTitle(newFiles[0].name.replace(/\.[^/.]+$/, ''));
         }
         showFeedback('success', `Attached ${newFiles.length} photo(s) to locked vault`);
+
+        if (autoDeleteOriginalPhotos) {
+          const assetsToDelete = result.assets.map((a) => ({ assetId: a.assetId, uri: a.uri }));
+          setTimeout(() => {
+            showConfirm(
+              'Delete from Public Gallery?',
+              `Photo(s) are securely attached to this vault item.\n\nWould you like to delete the original photo(s) from your public Gallery?`,
+              async () => {
+                const deleted = await deleteOriginalPhotosFromDevice(assetsToDelete);
+                if (deleted) {
+                  showFeedback('delete', 'Deleted from public gallery');
+                }
+              },
+              'Delete Originals',
+              true
+            );
+          }, 400);
+        }
       }
     } catch (err) {
       console.warn('Image pick error:', err);
       showFeedback('error', 'Could not load selected photo');
     } finally {
       setIsProcessingFiles(false);
+      setSystemOperationActive(false);
     }
   };
 
   const handlePickDocuments = async () => {
     try {
       setIsProcessingFiles(true);
+      setSystemOperationActive(true);
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'application/vnd.ms-excel',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'text/plain',
-          'image/*',
-          '*/*',
-        ],
+        type: ALLOWED_DOC_MIMES,
         multiple: true,
         copyToCacheDirectory: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
+        const validDocs = result.assets.filter((doc) => isAllowedDocFile(doc.name, doc.mimeType || undefined));
+        const blockedCount = result.assets.length - validDocs.length;
+
+        if (validDocs.length === 0) {
+          showFeedback('error', 'Pictures and videos are not allowed. Please select PDF, Word, or Excel files only.');
+          return;
+        }
+
         const newFiles: VaultFile[] = [];
-        for (const doc of result.assets) {
+        for (const doc of validDocs) {
           const name = doc.name;
           const savedUri = await persistVaultFile(doc.uri, name);
           const typeCategory = getFileTypeCategory(name, doc.mimeType || undefined);
@@ -209,13 +240,19 @@ export const AddEditItemScreen: React.FC<AddEditItemScreenProps> = ({
         if (title.trim() === '' && newFiles.length > 0) {
           setTitle(newFiles[0].name.replace(/\.[^/.]+$/, ''));
         }
-        showFeedback('success', `Attached ${newFiles.length} document(s)`);
+
+        if (blockedCount > 0) {
+          showFeedback('success', `Attached ${newFiles.length} document(s). (${blockedCount} photo/video files blocked)`);
+        } else {
+          showFeedback('success', `Attached ${newFiles.length} document(s)`);
+        }
       }
     } catch (err) {
       console.warn('Doc pick error:', err);
       showFeedback('error', 'Could not load selected document');
     } finally {
       setIsProcessingFiles(false);
+      setSystemOperationActive(false);
     }
   };
 
@@ -452,7 +489,7 @@ export const AddEditItemScreen: React.FC<AddEditItemScreenProps> = ({
               activeOpacity={0.8}
             >
               <FileUp size={16} color={colors.primary} />
-              <Text style={[styles.uploadBtnText, { color: colors.text }]}>Add PDF / Word</Text>
+              <Text style={[styles.uploadBtnText, { color: colors.text }]}>Add Document (PDF / Word / Excel)</Text>
             </TouchableOpacity>
           </View>
 
@@ -463,6 +500,7 @@ export const AddEditItemScreen: React.FC<AddEditItemScreenProps> = ({
                 const isImg = file.fileType === 'image';
                 const isPdf = file.fileType === 'pdf';
                 const isWord = file.fileType === 'word';
+                const isExcel = file.fileType === 'excel';
 
                 return (
                   <View
@@ -488,10 +526,14 @@ export const AddEditItemScreen: React.FC<AddEditItemScreenProps> = ({
                           },
                         ]}
                       >
-                        <FileText
-                          size={18}
-                          color={isPdf ? '#ef4444' : isWord ? '#3b82f6' : '#10b981'}
-                        />
+                        {isExcel ? (
+                          <FileSpreadsheet size={18} color="#10b981" />
+                        ) : (
+                          <FileText
+                            size={18}
+                            color={isPdf ? '#ef4444' : isWord ? '#3b82f6' : '#10b981'}
+                          />
+                        )}
                       </View>
                     )}
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,14 +19,21 @@ import {
   MoreVertical,
   Edit2,
   Layers,
+  LayoutGrid,
+  LayoutList,
+  Grid3x3,
+  Share2,
 } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { useAppContext, VaultItem, Folder, VaultFile, CARD_PALETTES } from '../context/AppContext';
 import { DriveBreadcrumb } from '../components/DriveBreadcrumb';
 import { ActionSheet } from '../components/ActionSheet';
 import { FilePreviewModal } from '../components/FilePreviewModal';
-import { formatFileSize, persistVaultFile, shareVaultFile } from '../utils/fileStorage';
+import { formatFileSize, persistVaultFile, shareVaultFile, deleteOriginalPhotosFromDevice, setSystemOperationActive } from '../utils/fileStorage';
 import { rf, theme } from '../theme';
+
+export type PhotosViewMode = 'grid' | 'compact' | 'list';
 
 interface ImagesScreenProps {
   onSelectItem: (item: VaultItem) => void;
@@ -51,13 +58,30 @@ export const ImagesScreen: React.FC<ImagesScreenProps> = ({
     searchQuery,
     showFeedback,
     showConfirm,
+    autoDeleteOriginalPhotos,
     colors,
     isDarkMode,
   } = useAppContext();
 
   const [selectedPhotoFilter, setSelectedPhotoFilter] = useState<'all' | 'favorites'>('all');
+  const [viewMode, setViewMode] = useState<PhotosViewMode>('grid');
   const [selectedFolderForAction, setSelectedFolderForAction] = useState<Folder | null>(null);
+  const [selectedItemForAction, setSelectedItemForAction] = useState<VaultItem | null>(null);
   const [previewFile, setPreviewFile] = useState<VaultFile | null>(null);
+
+  // Load view mode preference from AsyncStorage
+  useEffect(() => {
+    AsyncStorage.getItem('@klefkey_photos_view_mode').then((saved) => {
+      if (saved === 'grid' || saved === 'compact' || saved === 'list') {
+        setViewMode(saved as PhotosViewMode);
+      }
+    });
+  }, []);
+
+  const handleSetViewMode = (mode: PhotosViewMode) => {
+    setViewMode(mode);
+    AsyncStorage.setItem('@klefkey_photos_view_mode', mode).catch(() => {});
+  };
 
   // Subfolders in current folder (Photos/Albums only)
   const currentFolders = folders.filter((f) => f.type === 'images' && f.parentId === currentFolderId);
@@ -105,6 +129,7 @@ export const ImagesScreen: React.FC<ImagesScreenProps> = ({
         return;
       }
 
+      setSystemOperationActive(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: true,
@@ -135,23 +160,44 @@ export const ImagesScreen: React.FC<ImagesScreenProps> = ({
           });
         }
         showFeedback('success', `Saved ${result.assets.length} photo(s) to vault`);
+
+        if (autoDeleteOriginalPhotos) {
+          const assetsToDelete = result.assets.map((a) => ({ assetId: a.assetId, uri: a.uri }));
+          setTimeout(() => {
+            showConfirm(
+              'Delete from Public Gallery?',
+              `Photo(s) are securely locked in Klefkey.\n\nWould you like to delete the original photo(s) from your public Gallery so they cannot be seen outside Klefkey?`,
+              async () => {
+                const deleted = await deleteOriginalPhotosFromDevice(assetsToDelete);
+                if (deleted) {
+                  showFeedback('delete', 'Deleted from public gallery');
+                }
+              },
+              'Delete Originals',
+              true
+            );
+          }, 400);
+        }
       }
     } catch (err) {
       console.warn('Direct pick photo error:', err);
       showFeedback('error', 'Could not open photo gallery');
+    } finally {
+      setSystemOperationActive(false);
     }
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Folder Breadcrumbs */}
+      {/* Folder Breadcrumbs with Add Folder Button on the side */}
       <DriveBreadcrumb
         rootName="Photos"
         currentFolderId={currentFolderId}
         onSelectFolder={(id) => setCurrentFolderId(id)}
+        onAddFolder={onAddFolder}
       />
 
-      {/* Filter Tabs & Quick Folder Button */}
+      {/* Filter Tabs & View Mode */}
       <View style={styles.topControlRow}>
         <View style={styles.filterRow}>
           <TouchableOpacity
@@ -198,23 +244,57 @@ export const ImagesScreen: React.FC<ImagesScreenProps> = ({
                 },
               ]}
             >
-              ★ Favorites
+              ★ Favs
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Quick Add Folder Button */}
-        <TouchableOpacity
-          style={[
-            styles.quickFolderBtn,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-          onPress={onAddFolder}
-          activeOpacity={0.8}
-        >
-          <FolderPlus size={16} color={colors.text} />
-          <Text style={[styles.quickFolderBtnText, { color: colors.text }]}>Folder</Text>
-        </TouchableOpacity>
+        {/* Right Controls: View Switcher (Grid / Compact / List) */}
+        <View style={styles.rightControlGroup}>
+          <View style={[styles.viewModeSegment, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TouchableOpacity
+              style={[
+                styles.viewModeBtn,
+                viewMode === 'grid' && [styles.viewModeBtnActive, { backgroundColor: colors.primary }],
+              ]}
+              onPress={() => handleSetViewMode('grid')}
+              activeOpacity={0.7}
+            >
+              <LayoutGrid
+                size={15}
+                color={viewMode === 'grid' ? (isDarkMode ? '#09090b' : '#ffffff') : colors.textMuted}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.viewModeBtn,
+                viewMode === 'compact' && [styles.viewModeBtnActive, { backgroundColor: colors.primary }],
+              ]}
+              onPress={() => handleSetViewMode('compact')}
+              activeOpacity={0.7}
+            >
+              <Grid3x3
+                size={15}
+                color={viewMode === 'compact' ? (isDarkMode ? '#09090b' : '#ffffff') : colors.textMuted}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.viewModeBtn,
+                viewMode === 'list' && [styles.viewModeBtnActive, { backgroundColor: colors.primary }],
+              ]}
+              onPress={() => handleSetViewMode('list')}
+              activeOpacity={0.7}
+            >
+              <LayoutList
+                size={15}
+                color={viewMode === 'list' ? (isDarkMode ? '#09090b' : '#ffffff') : colors.textMuted}
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       <ScrollView
@@ -296,7 +376,7 @@ export const ImagesScreen: React.FC<ImagesScreenProps> = ({
           </View>
         )}
 
-        {/* Photos Grid Section */}
+        {/* Photos Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>
@@ -322,7 +402,196 @@ export const ImagesScreen: React.FC<ImagesScreenProps> = ({
                 </Text>
               </TouchableOpacity>
             </View>
+          ) : viewMode === 'list' ? (
+            /* ===== LIST VIEW WITH SMALL SIZE ICON ===== */
+            <View style={styles.photoListContainer}>
+              {currentImageItems.map((item) => {
+                const imageFile = item.files?.find((f) => f.fileType === 'image');
+                const imageUri = imageFile ? imageFile.uri : null;
+                const formattedDate = item.createdAt
+                  ? new Date(item.createdAt).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                    })
+                  : '';
+
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.photoListItem,
+                      { backgroundColor: colors.card, borderColor: colors.border },
+                    ]}
+                    onPress={() => {
+                      if (imageFile) {
+                        setPreviewFile(imageFile);
+                      } else {
+                        onSelectItem(item);
+                      }
+                    }}
+                    onLongPress={() => setSelectedItemForAction(item)}
+                    activeOpacity={0.78}
+                  >
+                    {/* Small Size Icon / Thumbnail */}
+                    <View
+                      style={[
+                        styles.photoListThumbBox,
+                        {
+                          borderColor: colors.border,
+                          backgroundColor: isDarkMode ? '#1e1e24' : '#f1f5f9',
+                        },
+                      ]}
+                    >
+                      {imageUri ? (
+                        <Image
+                          source={{ uri: imageUri }}
+                          style={styles.photoListThumb}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <ImageIcon size={20} color={colors.primary} />
+                      )}
+                      {item.files && item.files.length > 1 && (
+                        <View style={styles.listMultiBadge}>
+                          <Text style={styles.listMultiBadgeText}>{item.files.length}</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Metadata & Title */}
+                    <View style={styles.photoListInfo}>
+                      <Text
+                        style={[styles.photoListTitle, { color: colors.text }]}
+                        numberOfLines={1}
+                      >
+                        {item.title}
+                      </Text>
+                      <View style={styles.photoListMetaRow}>
+                        <Text style={[styles.photoListMetaText, { color: colors.textMuted }]}>
+                          {imageFile ? formatFileSize(imageFile.size) : 'Locked Photo'}
+                        </Text>
+                        {formattedDate ? (
+                          <>
+                            <Text style={[styles.metaDot, { color: colors.textMuted }]}>•</Text>
+                            <Text style={[styles.photoListMetaText, { color: colors.textMuted }]}>
+                              {formattedDate}
+                            </Text>
+                          </>
+                        ) : null}
+                      </View>
+                    </View>
+
+                    {/* Right Actions */}
+                    <View style={styles.photoListRightActions}>
+                      <TouchableOpacity
+                        style={styles.actionIconBtn}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(item.id);
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Star
+                          size={18}
+                          color={item.isFavorite ? '#f59e0b' : colors.textMuted}
+                          fill={item.isFavorite ? '#f59e0b' : 'transparent'}
+                        />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.actionIconBtn}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setSelectedItemForAction(item);
+                        }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <MoreVertical size={18} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : viewMode === 'compact' ? (
+            /* ===== COMPACT 3-COLUMN GRID WITH SMALL SIZE ICONS ===== */
+            <View style={styles.compactPhotoGrid}>
+              {currentImageItems.map((item) => {
+                const imageFile = item.files?.find((f) => f.fileType === 'image');
+                const imageUri = imageFile ? imageFile.uri : null;
+
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.compactPhotoCardWrapper}
+                    onPress={() => {
+                      if (imageFile) {
+                        setPreviewFile(imageFile);
+                      } else {
+                        onSelectItem(item);
+                      }
+                    }}
+                    onLongPress={() => setSelectedItemForAction(item)}
+                    activeOpacity={0.85}
+                  >
+                    <View
+                      style={[
+                        styles.compactPhotoCard,
+                        { backgroundColor: colors.card, borderColor: colors.border },
+                      ]}
+                    >
+                      {imageUri ? (
+                        <Image
+                          source={{ uri: imageUri }}
+                          style={styles.compactPhotoImage}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.compactPhotoFallback,
+                            { backgroundColor: isDarkMode ? '#1e1e24' : '#f1f5f9' },
+                          ]}
+                        >
+                          <ImageIcon size={22} color={colors.primary} />
+                        </View>
+                      )}
+
+                      {/* Favorite Badge */}
+                      {item.isFavorite && (
+                        <View style={styles.compactFavBadge}>
+                          <Star size={10} color="#f59e0b" fill="#f59e0b" />
+                        </View>
+                      )}
+
+                      {/* Multi Badge */}
+                      {item.files && item.files.length > 1 && (
+                        <View style={styles.compactMultiBadge}>
+                          <Text style={styles.compactMultiBadgeText}>{item.files.length}</Text>
+                        </View>
+                      )}
+
+                      {/* Small Caption */}
+                      <View
+                        style={[
+                          styles.compactCaptionBar,
+                          { backgroundColor: isDarkMode ? '#18181b' : '#ffffff' },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.compactPhotoTitle, { color: colors.text }]}
+                          numberOfLines={1}
+                        >
+                          {item.title}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           ) : (
+            /* ===== STANDARD 2-COLUMN GRID ===== */
             <View style={styles.photoGrid}>
               {currentImageItems.map((item) => {
                 const imageFile = item.files?.find((f) => f.fileType === 'image');
@@ -339,13 +608,7 @@ export const ImagesScreen: React.FC<ImagesScreenProps> = ({
                         onSelectItem(item);
                       }
                     }}
-                    onLongPress={() =>
-                      showConfirm(
-                        'Delete Photo',
-                        `Are you sure you want to delete "${item.title}"?`,
-                        () => deleteItem(item.id)
-                      )
-                    }
+                    onLongPress={() => setSelectedItemForAction(item)}
                     activeOpacity={0.88}
                   >
                     <View
@@ -404,6 +667,94 @@ export const ImagesScreen: React.FC<ImagesScreenProps> = ({
           )}
         </View>
       </ScrollView>
+
+      {/* Photo Item Action Sheet */}
+      <ActionSheet
+        visible={!!selectedItemForAction}
+        onClose={() => setSelectedItemForAction(null)}
+        title={selectedItemForAction?.title}
+        subtitle="Photo Options"
+      >
+        <View style={styles.actionSheetContent}>
+          <TouchableOpacity
+            style={[styles.actionSheetOption, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => {
+              const target = selectedItemForAction;
+              setSelectedItemForAction(null);
+              if (target) {
+                const img = target.files?.find((f) => f.fileType === 'image');
+                if (img) {
+                  setPreviewFile(img);
+                } else {
+                  onSelectItem(target);
+                }
+              }
+            }}
+          >
+            <ImageIcon size={20} color={colors.text} />
+            <Text style={[styles.actionSheetOptionText, { color: colors.text }]}>View Fullscreen</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionSheetOption, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => {
+              const target = selectedItemForAction;
+              setSelectedItemForAction(null);
+              if (target) {
+                toggleFavorite(target.id);
+                showFeedback(
+                  'success',
+                  target.isFavorite ? 'Removed from favorites' : 'Added to favorites'
+                );
+              }
+            }}
+          >
+            <Star
+              size={20}
+              color={selectedItemForAction?.isFavorite ? '#f59e0b' : colors.text}
+              fill={selectedItemForAction?.isFavorite ? '#f59e0b' : 'transparent'}
+            />
+            <Text style={[styles.actionSheetOptionText, { color: colors.text }]}>
+              {selectedItemForAction?.isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionSheetOption, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => {
+              const target = selectedItemForAction;
+              setSelectedItemForAction(null);
+              if (target) {
+                const img = target.files?.find((f) => f.fileType === 'image');
+                if (img) {
+                  shareVaultFile(img.uri, img.mimeType, img.name);
+                }
+              }
+            }}
+          >
+            <Share2 size={20} color={colors.text} />
+            <Text style={[styles.actionSheetOptionText, { color: colors.text }]}>Share / Export Photo</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionSheetOption, { backgroundColor: 'rgba(239,68,68,0.1)' }]}
+            onPress={() => {
+              const target = selectedItemForAction;
+              setSelectedItemForAction(null);
+              if (target) {
+                showConfirm(
+                  'Delete Photo',
+                  `Are you sure you want to delete "${target.title}"?`,
+                  () => deleteItem(target.id)
+                );
+              }
+            }}
+          >
+            <Trash2 size={20} color="#ef4444" />
+            <Text style={[styles.actionSheetOptionText, { color: '#ef4444' }]}>Delete Photo</Text>
+          </TouchableOpacity>
+        </View>
+      </ActionSheet>
 
       {/* Folder Action Sheet */}
       <ActionSheet
@@ -465,32 +816,56 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 10,
+    gap: 8,
   },
   filterRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
+    flexShrink: 1,
   },
   filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 12,
     borderWidth: 1,
   },
   filterChipText: {
     fontSize: rf(12),
   },
-  quickFolderBtn: {
+  rightControlGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 8,
+  },
+  viewModeSegment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 3,
     borderRadius: 12,
     borderWidth: 1,
-    gap: 5,
+    gap: 2,
   },
-  quickFolderBtnText: {
-    fontFamily: theme.fonts.bold,
-    fontSize: rf(12),
+  viewModeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewModeBtnActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  quickFolderBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mainScroll: {
     paddingHorizontal: 20,
@@ -582,6 +957,141 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.bold,
     fontSize: rf(13),
   },
+
+  /* ===== LIST VIEW STYLES ===== */
+  photoListContainer: {
+    gap: 10,
+  },
+  photoListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 12,
+  },
+  photoListThumbBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  photoListThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  listMultiBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 6,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  listMultiBadgeText: {
+    fontFamily: theme.fonts.bold,
+    fontSize: rf(9),
+    color: '#ffffff',
+  },
+  photoListInfo: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 2,
+  },
+  photoListTitle: {
+    fontFamily: theme.fonts.bold,
+    fontSize: rf(14),
+  },
+  photoListMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  photoListMetaText: {
+    fontFamily: theme.fonts.medium,
+    fontSize: rf(11),
+  },
+  metaDot: {
+    fontSize: rf(10),
+  },
+  photoListRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionIconBtn: {
+    padding: 6,
+    borderRadius: 8,
+  },
+
+  /* ===== COMPACT 3-COLUMN GRID STYLES ===== */
+  compactPhotoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  compactPhotoCardWrapper: {
+    width: '31.3%',
+  },
+  compactPhotoCard: {
+    width: '100%',
+    aspectRatio: 0.92,
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  compactPhotoImage: {
+    width: '100%',
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  compactPhotoFallback: {
+    width: '100%',
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactFavBadge: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactMultiBadge: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  compactMultiBadgeText: {
+    fontFamily: theme.fonts.bold,
+    fontSize: rf(9),
+    color: '#ffffff',
+  },
+  compactCaptionBar: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  compactPhotoTitle: {
+    fontFamily: theme.fonts.bold,
+    fontSize: rf(11),
+  },
+
+  /* ===== STANDARD 2-COLUMN GRID STYLES ===== */
   photoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -648,6 +1158,8 @@ const styles = StyleSheet.create({
     fontSize: rf(11),
     marginTop: 2,
   },
+
+  /* ===== ACTION SHEET STYLES ===== */
   actionSheetContent: {
     gap: 10,
     paddingVertical: 8,

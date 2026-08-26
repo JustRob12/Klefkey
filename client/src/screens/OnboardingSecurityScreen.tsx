@@ -82,11 +82,21 @@ export const OnboardingSecurityScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Header Icon */}
         <View style={styles.headerArea}>
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.logoBadge}
-            resizeMode="cover"
-          />
+          <View
+            style={[
+              styles.logoBadgeContainer,
+              {
+                backgroundColor: isDarkMode ? colors.card : '#f8f9fa',
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Image
+              source={isDarkMode ? require('../../assets/logo-white.png') : require('../../assets/logo.png')}
+              style={styles.logoBadge}
+              resizeMode="contain"
+            />
+          </View>
           <Text style={[styles.title, { color: colors.text }]}>
             {step === 1 ? 'Welcome to Klefkey' : 'Confirm & Enable Biometrics'}
           </Text>
@@ -261,11 +271,23 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 16,
   },
-  logoBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 18,
+  logoBadgeContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  logoBadge: {
+    width: 44,
+    height: 44,
   },
   title: {
     fontFamily: theme.fonts.bold,

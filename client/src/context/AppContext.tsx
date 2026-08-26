@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { darkColors, lightColors, ColorsType } from '../theme';
+import { isSystemOperationActive } from '../utils/fileStorage';
 
 export type ItemCategory = 'login' | 'email' | 'note' | 'card' | 'document' | 'image';
 
@@ -12,7 +14,7 @@ export interface VaultFile {
   uri: string;
   mimeType?: string;
   size?: number;
-  fileType: 'image' | 'pdf' | 'word' | 'other';
+  fileType: 'image' | 'pdf' | 'word' | 'excel' | 'other';
   createdAt: string;
 }
 
@@ -106,6 +108,10 @@ interface AppContextType {
   isLocked: boolean;
   hasBiometricsHardware: boolean;
   biometricsType: string;
+  autoLockOnExit: boolean;
+  setAutoLockOnExit: (enable: boolean) => Promise<void>;
+  autoDeleteOriginalPhotos: boolean;
+  setAutoDeleteOriginalPhotos: (enable: boolean) => Promise<void>;
   setupSecurity: (pin: string, enableBio: boolean, name?: string) => Promise<void>;
   unlockAppWithPin: (pin: string) => boolean;
   unlockAppWithBiometrics: () => Promise<boolean>;
@@ -179,6 +185,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isLocked, setIsLocked] = useState<boolean>(true);
   const [hasBiometricsHardware, setHasBiometricsHardware] = useState<boolean>(false);
   const [biometricsType, setBiometricsType] = useState<string>('Biometrics');
+  const [autoLockOnExit, setAutoLockOnExitState] = useState<boolean>(true);
+  const [autoDeleteOriginalPhotos, setAutoDeleteOriginalPhotosState] = useState<boolean>(true);
+
+  // AppState & background auto-lock tracking
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const hasSetupPinRef = useRef<boolean>(hasSetupPin);
+  const autoLockOnExitRef = useRef<boolean>(autoLockOnExit);
+
+  useEffect(() => {
+    hasSetupPinRef.current = hasSetupPin;
+  }, [hasSetupPin]);
+
+  useEffect(() => {
+    autoLockOnExitRef.current = autoLockOnExit;
+  }, [autoLockOnExit]);
+
+  // Lock vault immediately when the app goes into background or inactive (unless a system picker is active)
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      const isLeaving =
+        appStateRef.current === 'active' &&
+        (nextAppState === 'background' || nextAppState === 'inactive');
+
+      if (isLeaving && hasSetupPinRef.current && autoLockOnExitRef.current) {
+        if (!isSystemOperationActive()) {
+          setIsLocked(true);
+        }
+      }
+
+      appStateRef.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   // Theme state (White is the primary main color)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
@@ -281,6 +324,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } else {
           setHasSetupPin(false);
           setIsLocked(false);
+        }
+
+        // 4.1 Load Auto Delete Original Photos preference
+        const storedAutoDel = await AsyncStorage.getItem('@klefkey_auto_delete_originals');
+        if (storedAutoDel !== null) {
+          setAutoDeleteOriginalPhotosState(storedAutoDel === 'true');
+        }
+
+        // 4.2 Load Auto Lock on Exit preference (defaults to true)
+        const storedAutoLock = await AsyncStorage.getItem('@klefkey_auto_lock_on_exit');
+        if (storedAutoLock !== null) {
+          setAutoLockOnExitState(storedAutoLock === 'true');
         }
 
         // 5. Load Folders
@@ -393,6 +448,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await saveSecure('klefkey_bio_enabled', enableBio ? 'true' : 'false');
     }
     showFeedback('success', 'Security Settings Updated');
+  };
+
+  const setAutoDeleteOriginalPhotos = async (enable: boolean) => {
+    setAutoDeleteOriginalPhotosState(enable);
+    await AsyncStorage.setItem('@klefkey_auto_delete_originals', enable ? 'true' : 'false');
+  };
+
+  const setAutoLockOnExit = async (enable: boolean) => {
+    setAutoLockOnExitState(enable);
+    await AsyncStorage.setItem('@klefkey_auto_lock_on_exit', enable ? 'true' : 'false');
   };
 
   // -------------------------------------------------------------
@@ -586,6 +651,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isLocked,
         hasBiometricsHardware,
         biometricsType,
+        autoLockOnExit,
+        setAutoLockOnExit,
+        autoDeleteOriginalPhotos,
+        setAutoDeleteOriginalPhotos,
         setupSecurity,
         unlockAppWithPin,
         unlockAppWithBiometrics,

@@ -32,6 +32,7 @@ interface VaultScreenProps {
   onSelectItem: (item: VaultItem) => void;
   onOpenAddItemModal: () => void;
   onOpenSettings: () => void;
+  onAddFolder: () => void;
   onEditFolder: (folder: Folder) => void;
 }
 
@@ -39,6 +40,7 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
   onSelectItem,
   onOpenAddItemModal,
   onOpenSettings,
+  onAddFolder,
   onEditFolder,
 }) => {
   const {
@@ -138,8 +140,10 @@ export const VaultScreen: React.FC<VaultScreenProps> = ({
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Google Drive Breadcrumb Navigation */}
       <DriveBreadcrumb
+        rootName="Vault"
         currentFolderId={currentFolderId}
         onSelectFolder={(id) => setCurrentFolderId(id)}
+        onAddFolder={onAddFolder}
       />
 
       {/* Category Filter Horizontal Chips */}

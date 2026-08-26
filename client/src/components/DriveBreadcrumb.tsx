@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { ChevronRight, HardDrive, Folder as FolderIcon } from 'lucide-react-native';
+import { ChevronRight, HardDrive, Folder as FolderIcon, FolderPlus } from 'lucide-react-native';
 import { useAppContext, BreadcrumbItem } from '../context/AppContext';
 import { rf, theme } from '../theme';
 
@@ -8,12 +8,14 @@ interface DriveBreadcrumbProps {
   currentFolderId: string | null;
   rootName?: string;
   onSelectFolder: (folderId: string | null) => void;
+  onAddFolder?: () => void;
 }
 
 export const DriveBreadcrumb: React.FC<DriveBreadcrumbProps> = ({
   currentFolderId,
   rootName = 'Vault',
   onSelectFolder,
+  onAddFolder,
 }) => {
   const { getFolderPath, colors, isDarkMode } = useAppContext();
   const path: BreadcrumbItem[] = getFolderPath(currentFolderId, rootName);
@@ -69,18 +71,37 @@ export const DriveBreadcrumb: React.FC<DriveBreadcrumbProps> = ({
           );
         })}
       </ScrollView>
+
+      {onAddFolder && (
+        <TouchableOpacity
+          style={[
+            styles.addFolderBtn,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+          onPress={onAddFolder}
+          activeOpacity={0.8}
+        >
+          <FolderPlus size={14} color={colors.text} />
+          <Text style={[styles.addFolderBtnText, { color: colors.text }]}>Folder</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 6,
+    paddingHorizontal: 16,
+    gap: 8,
   },
   scrollContent: {
     alignItems: 'center',
-    paddingHorizontal: 16,
     gap: 4,
+    flexGrow: 1,
   },
   chip: {
     flexDirection: 'row',
@@ -95,5 +116,18 @@ const styles = StyleSheet.create({
   },
   separator: {
     marginHorizontal: 2,
+  },
+  addFolderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 5,
+  },
+  addFolderBtnText: {
+    fontFamily: theme.fonts.bold,
+    fontSize: rf(12),
   },
 });

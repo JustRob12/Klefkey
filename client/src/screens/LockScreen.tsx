@@ -7,6 +7,7 @@ import {
   StatusBar,
   Animated,
   Image,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScanFace, Fingerprint, KeyRound, AlertCircle, Delete } from 'lucide-react-native';
@@ -27,14 +28,26 @@ export const LockScreen: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [shakeAnimation] = useState(new Animated.Value(0));
 
-  // Trigger biometrics on mount if enabled
+  // Trigger biometrics on mount & whenever app comes to foreground while locked
   useEffect(() => {
-    if (biometricsEnabled) {
-      const timer = setTimeout(() => {
-        unlockAppWithBiometrics();
-      }, 400);
-      return () => clearTimeout(timer);
-    }
+    if (!biometricsEnabled) return;
+
+    const timer = setTimeout(() => {
+      unlockAppWithBiometrics();
+    }, 400);
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        setTimeout(() => {
+          unlockAppWithBiometrics();
+        }, 300);
+      }
+    });
+
+    return () => {
+      clearTimeout(timer);
+      subscription.remove();
+    };
   }, [biometricsEnabled]);
 
   const triggerShake = () => {
@@ -78,11 +91,21 @@ export const LockScreen: React.FC = () => {
       <View style={styles.content}>
         {/* Header Branding */}
         <View style={styles.header}>
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.logoImage}
-            resizeMode="cover"
-          />
+          <View
+            style={[
+              styles.logoBadgeContainer,
+              {
+                backgroundColor: isDarkMode ? colors.card : '#f8f9fa',
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Image
+              source={isDarkMode ? require('../../assets/logo-white.png') : require('../../assets/logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
+          </View>
           <Text style={[styles.appName, { color: colors.text }]}>Klefkey</Text>
           <Text style={[styles.lockStatus, { color: colors.textSecondary }]}>
             Vault Locked
@@ -193,11 +216,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  logoImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
+  logoBadgeContainer: {
+    width: 76,
+    height: 76,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  logoImage: {
+    width: 46,
+    height: 46,
   },
   appName: {
     fontFamily: theme.fonts.bold,

@@ -11,7 +11,14 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { AppProvider, useAppContext, VaultItem, Folder, VaultFile, ItemCategory, FolderType } from './src/context/AppContext';
-import { persistVaultFile, getFileTypeCategory } from './src/utils/fileStorage';
+import {
+  persistVaultFile,
+  getFileTypeCategory,
+  deleteOriginalPhotosFromDevice,
+  ALLOWED_DOC_MIMES,
+  isAllowedDocFile,
+  setSystemOperationActive,
+} from './src/utils/fileStorage';
 import { OnboardingSecurityScreen } from './src/screens/OnboardingSecurityScreen';
 import { LockScreen } from './src/screens/LockScreen';
 import { VaultScreen } from './src/screens/VaultScreen';
@@ -21,7 +28,6 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ItemDetailScreen } from './src/screens/ItemDetailScreen';
 import { AddEditItemScreen } from './src/screens/AddEditItemScreen';
 import { AddFolderModal } from './src/screens/AddFolderModal';
-import { AddChoiceSheet } from './src/components/AddChoiceSheet';
 import { FloatingBottomBar, MainTabType } from './src/components/FloatingBottomBar';
 import { MainHeader } from './src/components/MainHeader';
 import { FeedbackModal } from './src/components/FeedbackModal';
@@ -36,6 +42,8 @@ const MainApp: React.FC = () => {
     setCurrentFolderId,
     addItem,
     showFeedback,
+    showConfirm,
+    autoDeleteOriginalPhotos,
     colors,
     isDarkMode,
   } = useAppContext();
@@ -46,7 +54,6 @@ const MainApp: React.FC = () => {
   // Modal States
   const [selectedItem, setSelectedItem] = useState<VaultItem | null>(null);
   const [showDetailModal, setShowDetailModal] = useState<boolean>(false);
-  const [showAddChoiceModal, setShowAddChoiceModal] = useState<boolean>(false);
   const [showAddEditModal, setShowAddEditModal] = useState<boolean>(false);
   const [itemToEdit, setItemToEdit] = useState<VaultItem | null>(null);
   const [addInitialCategory, setAddInitialCategory] = useState<ItemCategory>('login');
@@ -82,6 +89,7 @@ const MainApp: React.FC = () => {
         return;
       }
 
+      setSystemOperationActive(true);
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: true,
@@ -112,33 +120,53 @@ const MainApp: React.FC = () => {
           });
         }
         showFeedback('success', `Saved ${result.assets.length} photo(s) to vault`);
+
+        if (autoDeleteOriginalPhotos) {
+          const assetsToDelete = result.assets.map((a) => ({ assetId: a.assetId, uri: a.uri }));
+          setTimeout(() => {
+            showConfirm(
+              'Delete from Public Gallery?',
+              `Photo(s) are securely locked in Klefkey.\n\nWould you like to delete the original photo(s) from your public Gallery so they cannot be seen outside Klefkey?`,
+              async () => {
+                const deleted = await deleteOriginalPhotosFromDevice(assetsToDelete);
+                if (deleted) {
+                  showFeedback('delete', 'Deleted from public gallery');
+                }
+              },
+              'Delete Originals',
+              true
+            );
+          }, 400);
+        }
       }
     } catch (err) {
       console.warn('Direct pick photo error:', err);
       showFeedback('error', 'Could not open gallery');
+    } finally {
+      setSystemOperationActive(false);
     }
   };
 
-  // Direct Document Import (zero form modal)
+  // Direct Document Import (strictly PDF, Word, Excel - zero pictures/videos)
   const handleDirectPickDocuments = async () => {
     try {
+      setSystemOperationActive(true);
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'application/vnd.ms-excel',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'text/plain',
-          'image/*',
-          '*/*',
-        ],
+        type: ALLOWED_DOC_MIMES,
         multiple: true,
         copyToCacheDirectory: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        for (const doc of result.assets) {
+        const validDocs = result.assets.filter((doc) => isAllowedDocFile(doc.name, doc.mimeType || undefined));
+        const blockedCount = result.assets.length - validDocs.length;
+
+        if (validDocs.length === 0) {
+          showFeedback('error', 'Pictures and videos are not allowed. Please select PDF, Word, or Excel files only.');
+          return;
+        }
+
+        for (const doc of validDocs) {
           const name = doc.name;
           const savedUri = await persistVaultFile(doc.uri, name);
           const typeCategory = getFileTypeCategory(name, doc.mimeType || undefined);
@@ -161,11 +189,18 @@ const MainApp: React.FC = () => {
             isFavorite: false,
           });
         }
-        showFeedback('success', `Saved ${result.assets.length} document(s) to vault`);
+
+        if (blockedCount > 0) {
+          showFeedback('success', `Saved ${validDocs.length} document(s). (${blockedCount} photo/video files blocked)`);
+        } else {
+          showFeedback('success', `Saved ${validDocs.length} document(s) to vault`);
+        }
       }
     } catch (err) {
       console.warn('Direct pick doc error:', err);
       showFeedback('error', 'Could not open document picker');
+    } finally {
+      setSystemOperationActive(false);
     }
   };
 
@@ -224,6 +259,7 @@ const MainApp: React.FC = () => {
               setShowAddEditModal(true);
             }}
             onOpenSettings={() => setCurrentScreen('settings')}
+            onAddFolder={handleOpenAddFolder}
             onEditFolder={handleOpenEditFolder}
           />
         )}
@@ -251,24 +287,19 @@ const MainApp: React.FC = () => {
         <FloatingBottomBar
           activeTab={currentScreen as MainTabType}
           onSelectTab={handleSelectTab}
-          onPressPlus={() => setShowAddChoiceModal(true)}
+          onPressPlus={() => {
+            if (currentScreen === 'vault') {
+              setItemToEdit(null);
+              setAddInitialCategory('login');
+              setShowAddEditModal(true);
+            } else if (currentScreen === 'files') {
+              handleDirectPickDocuments();
+            } else if (currentScreen === 'images') {
+              handleDirectPickPhotos();
+            }
+          }}
         />
       )}
-
-      {/* Screen-Specific Choice Sheet (Ask: Add Folder or Upload Photo/Files/Credential) */}
-      <AddChoiceSheet
-        visible={showAddChoiceModal}
-        screenType={currentFolderType}
-        onClose={() => setShowAddChoiceModal(false)}
-        onSelectAddFolder={handleOpenAddFolder}
-        onSelectAddCredential={() => {
-          setItemToEdit(null);
-          setAddInitialCategory('login');
-          setShowAddEditModal(true);
-        }}
-        onSelectUploadFiles={() => handleDirectPickDocuments()}
-        onSelectUploadPhotos={() => handleDirectPickPhotos()}
-      />
 
       {/* Modals & Overlays */}
       <ItemDetailScreen

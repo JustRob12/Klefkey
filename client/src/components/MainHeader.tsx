@@ -8,14 +8,21 @@ interface MainHeaderProps {
 }
 
 export const MainHeader: React.FC<MainHeaderProps> = ({ onOpenSettings }) => {
-  const { userName, userAvatar, colors } = useAppContext();
+  const { userName, userAvatar, colors, isDarkMode } = useAppContext();
 
   return (
     <View style={[styles.header, { borderBottomColor: colors.border }]}>
       <View style={styles.headerLeft}>
-        <Text style={[styles.welcomeSubText, { color: colors.textMuted }]}>
-          Welcome to Klefkey
-        </Text>
+        <View style={styles.brandRow}>
+          <Image
+            source={isDarkMode ? require('../../assets/logo-white.png') : require('../../assets/logo.png')}
+            style={styles.brandLogo}
+            resizeMode="contain"
+          />
+          <Text style={[styles.welcomeSubText, { color: colors.textMuted }]}>
+            Welcome to Klefkey
+          </Text>
+        </View>
         <Text
           style={[styles.userNameText, { color: colors.text }]}
           numberOfLines={1}
@@ -59,6 +66,16 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flex: 1,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  brandLogo: {
+    width: 14,
+    height: 14,
   },
   welcomeSubText: {
     fontFamily: theme.fonts.bold,

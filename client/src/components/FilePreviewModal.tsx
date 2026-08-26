@@ -42,6 +42,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const isImage = file.fileType === 'image';
   const isPdf = file.fileType === 'pdf';
   const isWord = file.fileType === 'word';
+  const isExcel = file.fileType === 'excel';
 
   const handleShare = async () => {
     const success = await shareVaultFile(file.uri, file.mimeType, file.name);
@@ -120,10 +121,14 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                     },
                   ]}
                 >
-                  <FileText
-                    size={48}
-                    color={isPdf ? '#ef4444' : isWord ? '#3b82f6' : '#10b981'}
-                  />
+                  {isExcel ? (
+                    <FileSpreadsheet size={48} color="#10b981" />
+                  ) : (
+                    <FileText
+                      size={48}
+                      color={isPdf ? '#ef4444' : isWord ? '#3b82f6' : '#10b981'}
+                    />
+                  )}
                 </View>
 
                 <Text
@@ -151,7 +156,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                       { color: isPdf ? '#ef4444' : isWord ? '#3b82f6' : '#10b981' },
                     ]}
                   >
-                    {isPdf ? 'PDF DOCUMENT' : isWord ? 'WORD DOCUMENT' : 'SECURE DOCUMENT'}
+                    {isPdf ? 'PDF DOCUMENT' : isWord ? 'WORD DOCUMENT' : isExcel ? 'EXCEL SPREADSHEET' : 'SECURE DOCUMENT'}
                   </Text>
                 </View>
 

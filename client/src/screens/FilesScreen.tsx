@@ -9,6 +9,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   FileText,
+  FileSpreadsheet,
   Plus,
   Star,
   Share2,
@@ -24,7 +25,16 @@ import { useAppContext, VaultItem, Folder, VaultFile, CARD_PALETTES } from '../c
 import { DriveBreadcrumb } from '../components/DriveBreadcrumb';
 import { ActionSheet } from '../components/ActionSheet';
 import { FilePreviewModal } from '../components/FilePreviewModal';
-import { formatFileSize, getFileTypeLabel, persistVaultFile, getFileTypeCategory, shareVaultFile } from '../utils/fileStorage';
+import {
+  formatFileSize,
+  getFileTypeLabel,
+  persistVaultFile,
+  getFileTypeCategory,
+  shareVaultFile,
+  ALLOWED_DOC_MIMES,
+  isAllowedDocFile,
+  setSystemOperationActive,
+} from '../utils/fileStorage';
 import { rf, theme } from '../theme';
 
 interface FilesScreenProps {
@@ -54,20 +64,26 @@ export const FilesScreen: React.FC<FilesScreenProps> = ({
     isDarkMode,
   } = useAppContext();
 
-  const [selectedDocFilter, setSelectedDocFilter] = useState<'all' | 'pdf' | 'word' | 'favorites'>('all');
+  const [selectedDocFilter, setSelectedDocFilter] = useState<'all' | 'pdf' | 'word' | 'excel' | 'favorites'>('all');
   const [selectedFolderForAction, setSelectedFolderForAction] = useState<Folder | null>(null);
   const [previewFile, setPreviewFile] = useState<VaultFile | null>(null);
 
   // Subfolders in current folder (Files/Documents only)
   const currentFolders = folders.filter((f) => f.type === 'files' && f.parentId === currentFolderId);
 
-  // Filter items that are documents or have attached files
+  // Filter items that are documents (strictly PDF, Word, Excel - No images or videos)
   const currentDocItems = items.filter((item) => {
-    const isDocCategory = item.category === 'document';
-    const hasDocFiles = item.files?.some((f) => f.fileType === 'pdf' || f.fileType === 'word' || f.fileType === 'other');
-    const isApplicable = isDocCategory || hasDocFiles;
+    if (item.category === 'image') return false;
 
-    if (!isApplicable) return false;
+    const hasAllowedDocFiles = item.files?.some(
+      (f) => f.fileType === 'pdf' || f.fileType === 'word' || f.fileType === 'excel'
+    );
+    const isDocCategory = item.category === 'document';
+    const isApplicable = isDocCategory || hasAllowedDocFiles;
+
+    const containsImageOrVideo = item.files?.some((f) => f.fileType === 'image');
+    if (!isApplicable || (item.files && item.files.length > 0 && !hasAllowedDocFiles)) return false;
+    if (containsImageOrVideo && !hasAllowedDocFiles) return false;
 
     // Search query matching
     if (searchQuery.trim() !== '') {
@@ -87,6 +103,14 @@ export const FilesScreen: React.FC<FilesScreenProps> = ({
     if (selectedDocFilter === 'word') {
       return item.files?.some((f) => f.fileType === 'word') || item.title.toLowerCase().includes('.doc');
     }
+    if (selectedDocFilter === 'excel') {
+      return (
+        item.files?.some((f) => f.fileType === 'excel') ||
+        item.title.toLowerCase().endsWith('.xls') ||
+        item.title.toLowerCase().endsWith('.xlsx') ||
+        item.title.toLowerCase().endsWith('.csv')
+      );
+    }
 
     return true;
   });
@@ -101,26 +125,26 @@ export const FilesScreen: React.FC<FilesScreenProps> = ({
     return [startColor, endColor];
   };
 
-  // Direct Document Picker - No modal required
+  // Direct Document Picker - Restricted to PDF, Word, and Excel only (Zero Images/Videos)
   const handleDirectPickDocuments = async () => {
     try {
+      setSystemOperationActive(true);
       const result = await DocumentPicker.getDocumentAsync({
-        type: [
-          'application/pdf',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'application/vnd.ms-excel',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'text/plain',
-          'image/*',
-          '*/*',
-        ],
+        type: ALLOWED_DOC_MIMES,
         multiple: true,
         copyToCacheDirectory: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        for (const doc of result.assets) {
+        const validDocs = result.assets.filter((doc) => isAllowedDocFile(doc.name, doc.mimeType || undefined));
+        const blockedCount = result.assets.length - validDocs.length;
+
+        if (validDocs.length === 0) {
+          showFeedback('error', 'Pictures and videos are not allowed. Please select PDF, Word, or Excel files only.');
+          return;
+        }
+
+        for (const doc of validDocs) {
           const name = doc.name;
           const savedUri = await persistVaultFile(doc.uri, name);
           const typeCategory = getFileTypeCategory(name, doc.mimeType || undefined);
@@ -143,11 +167,18 @@ export const FilesScreen: React.FC<FilesScreenProps> = ({
             isFavorite: false,
           });
         }
-        showFeedback('success', `Saved ${result.assets.length} document(s) to vault`);
+
+        if (blockedCount > 0) {
+          showFeedback('success', `Saved ${validDocs.length} document(s). (${blockedCount} photo/video files blocked)`);
+        } else {
+          showFeedback('success', `Saved ${validDocs.length} document(s) to vault`);
+        }
       }
     } catch (err) {
       console.warn('Doc pick error:', err);
       showFeedback('error', 'Could not open document picker');
+    } finally {
+      setSystemOperationActive(false);
     }
   };
 
@@ -164,19 +195,21 @@ export const FilesScreen: React.FC<FilesScreenProps> = ({
     { id: 'all', label: 'All Documents' },
     { id: 'pdf', label: '📄 PDF Files' },
     { id: 'word', label: '📝 Word Docs' },
+    { id: 'excel', label: '📊 Excel Sheets' },
     { id: 'favorites', label: '★ Favorites' },
   ];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Folder Breadcrumbs */}
+      {/* Folder Breadcrumbs with Add Folder Button on the side */}
       <DriveBreadcrumb
         rootName="Documents"
         currentFolderId={currentFolderId}
         onSelectFolder={(id) => setCurrentFolderId(id)}
+        onAddFolder={onAddFolder}
       />
 
-      {/* Filter Tabs & New Folder Quick Action */}
+      {/* Filter Tabs */}
       <View style={styles.topControlRow}>
         <ScrollView
           horizontal
@@ -213,19 +246,6 @@ export const FilesScreen: React.FC<FilesScreenProps> = ({
             );
           })}
         </ScrollView>
-
-        {/* Quick Add Folder Button */}
-        <TouchableOpacity
-          style={[
-            styles.quickFolderBtn,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-          onPress={onAddFolder}
-          activeOpacity={0.8}
-        >
-          <FolderPlus size={16} color={colors.text} />
-          <Text style={[styles.quickFolderBtnText, { color: colors.text }]}>Folder</Text>
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -244,7 +264,11 @@ export const FilesScreen: React.FC<FilesScreenProps> = ({
             <View style={styles.folderGrid}>
               {currentFolders.map((folder) => {
                 const subCount = items.filter(
-                  (i) => i.folderId === folder.id && (i.category === 'document' || i.files?.some((f) => f.fileType !== 'image'))
+                  (i) =>
+                    i.folderId === folder.id &&
+                    (i.category === 'document' ||
+                      i.files?.some((f) => f.fileType === 'pdf' || f.fileType === 'word' || f.fileType === 'excel')) &&
+                    !i.files?.some((f) => f.fileType === 'image')
                 ).length;
                 const gradientColors = getCardGradient(folder.color);
                 const palette = CARD_PALETTES.find((p) => p.id === folder.color);
@@ -320,7 +344,7 @@ export const FilesScreen: React.FC<FilesScreenProps> = ({
               <FileText size={40} color={colors.textMuted} />
               <Text style={[styles.emptyTitle, { color: colors.text }]}>No Documents Stored</Text>
               <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-                Tap below to choose any PDF or Word file from your device to lock immediately.
+                Tap below to choose any PDF, Word, or Excel file from your device to lock immediately.
               </Text>
               <TouchableOpacity
                 style={[styles.addInlineBtn, { backgroundColor: colors.primary }]}
@@ -329,7 +353,7 @@ export const FilesScreen: React.FC<FilesScreenProps> = ({
               >
                 <Plus size={16} color={isDarkMode ? '#09090b' : '#ffffff'} />
                 <Text style={[styles.addInlineBtnText, { color: isDarkMode ? '#09090b' : '#ffffff' }]}>
-                  Choose Document (PDF / Word)
+                  Choose Document (PDF / Word / Excel)
                 </Text>
               </TouchableOpacity>
             </View>
@@ -342,6 +366,11 @@ export const FilesScreen: React.FC<FilesScreenProps> = ({
               const primaryFile = item.files && item.files.length > 0 ? item.files[0] : null;
               const isPdf = primaryFile ? primaryFile.fileType === 'pdf' : item.title.toLowerCase().endsWith('.pdf');
               const isWord = primaryFile ? primaryFile.fileType === 'word' : item.title.toLowerCase().includes('.doc');
+              const isExcel = primaryFile
+                ? primaryFile.fileType === 'excel'
+                : item.title.toLowerCase().endsWith('.xls') ||
+                  item.title.toLowerCase().endsWith('.xlsx') ||
+                  item.title.toLowerCase().endsWith('.csv');
 
               return (
                 <TouchableOpacity
@@ -386,10 +415,14 @@ export const FilesScreen: React.FC<FilesScreenProps> = ({
                           },
                         ]}
                       >
-                        <FileText
-                          size={22}
-                          color={isPdf ? '#ef4444' : isWord ? '#3b82f6' : '#10b981'}
-                        />
+                        {isExcel ? (
+                          <FileSpreadsheet size={22} color="#10b981" />
+                        ) : (
+                          <FileText
+                            size={22}
+                            color={isPdf ? '#ef4444' : isWord ? '#3b82f6' : '#10b981'}
+                          />
+                        )}
                       </View>
 
                       {/* Document Info */}
@@ -433,6 +466,8 @@ export const FilesScreen: React.FC<FilesScreenProps> = ({
                             ? 'PDF Document'
                             : isWord
                             ? 'Word Document'
+                            : isExcel
+                            ? 'Excel Spreadsheet'
                             : 'Secure Document'}
                         </Text>
                       </View>

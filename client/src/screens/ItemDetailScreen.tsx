@@ -215,6 +215,7 @@ export const ItemDetailScreen: React.FC<ItemDetailScreenProps> = ({
                 const isImg = file.fileType === 'image';
                 const isPdf = file.fileType === 'pdf';
                 const isWord = file.fileType === 'word';
+                const isExcel = file.fileType === 'excel';
 
                 return (
                   <TouchableOpacity
@@ -242,10 +243,14 @@ export const ItemDetailScreen: React.FC<ItemDetailScreenProps> = ({
                           },
                         ]}
                       >
-                        <FileText
-                          size={22}
-                          color={isPdf ? '#ef4444' : isWord ? '#3b82f6' : '#10b981'}
-                        />
+                        {isExcel ? (
+                          <FileSpreadsheet size={22} color="#10b981" />
+                        ) : (
+                          <FileText
+                            size={22}
+                            color={isPdf ? '#ef4444' : isWord ? '#3b82f6' : '#10b981'}
+                          />
+                        )}
                       </View>
                     )}
 

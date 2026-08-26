@@ -18,6 +18,7 @@
       "bundleIdentifier": "com.klefkey.vault",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Allow Klefkey to use Face ID for secure vault authentication.",
+        "NSPhotoLibraryUsageDescription": "Allow Klefkey to access and lock your photos in the secure vault.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -38,7 +39,10 @@
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
         "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
+        "android.permission.USE_FINGERPRINT",
+        "READ_MEDIA_IMAGES",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
@@ -51,6 +55,13 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Allow Klefkey to use Face ID for secure vault authentication."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow Klefkey to access and lock your photos in the secure vault.",
+          "savePhotosPermission": "Allow Klefkey to save photos."
         }
       ],
       "expo-secure-store",
